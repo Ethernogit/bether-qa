@@ -1,0 +1,45 @@
+{
+  "name": "bether-qa",
+  "version": "0.1.0",
+  "description": "MCP server and CLI that maps Node.js project architecture using AI",
+  "main": "dist/index.js",
+  "bin": {
+    "bether-qa": "./bin/bether-qa.js",
+    "bether-qa-mcp": "./bin/bether-qa-mcp.js"
+  },
+  "files": [
+    "dist",
+    "bin/bether-qa.js",
+    "bin/bether-qa-mcp.js"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "tsc"
+  },
+  "keywords": [
+    "mcp",
+    "architecture",
+    "claude",
+    "ai",
+    "typescript",
+    "analyzer"
+  ],
+  "author": "Juan Jose Fuentes Martinez",
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.96.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "commander": "^13.1.0",
+    "dotenv": "^17.4.2",
+    "glob": "^13.0.6",
+    "ts-morph": "^28.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.8.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
