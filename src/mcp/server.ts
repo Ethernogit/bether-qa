@@ -1,18 +1,15 @@
-import dotenv from "dotenv";
 import path from "path";
 import { glob } from "glob";
 import { parseProject } from "../parser/fileParser";
-import { analyzeModules } from "../ai/moduleAnalyzer";
 import { writeArchitecture } from "../output/architectureWriter";
-
-dotenv.config();
+import { ArchitectureResult } from "../ai/moduleAnalyzer";
 
 // El exports map del SDK solo expone "./server". Usamos require.resolve para
 // localizar el CJS real y acceder a stdio y types desde el mismo directorio.
 /* eslint-disable @typescript-eslint/no-require-imports */
 const serverIndexPath = require.resolve("@modelcontextprotocol/sdk/server");
-const serverDir = path.dirname(serverIndexPath);           // .../dist/cjs/server
-const sdkCjsDir = path.dirname(serverDir);                 // .../dist/cjs
+const serverDir = path.dirname(serverIndexPath);
+const sdkCjsDir = path.dirname(serverDir);
 
 const { Server } = require(serverIndexPath) as {
   Server: new (info: object, options: object) => {
@@ -30,7 +27,7 @@ const { ListToolsRequestSchema, CallToolRequestSchema } = require(path.join(sdkC
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 const server = new Server(
-  { name: "bether-qa", version: "0.1.0" },
+  { name: "bether-qa", version: "0.2.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -38,30 +35,41 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: "scan_project",
-      description:
-        "Escanea un proyecto y lista todos los archivos .ts y .js encontrados. No usa IA.",
+      description: "Lista todos los archivos .ts y .js de un proyecto (excluye node_modules, dist).",
       inputSchema: {
         type: "object",
         properties: {
-          path: {
-            type: "string",
-            description: "Ruta absoluta al proyecto (por defecto: directorio actual)",
-          },
+          path: { type: "string", description: "Ruta absoluta al proyecto" },
         },
+        required: ["path"],
       },
     },
     {
-      name: "analyze_architecture",
+      name: "get_file_metadata",
       description:
-        "Analiza la arquitectura de un proyecto Node.js con IA. Identifica módulos funcionales, conexiones entre ellos y el patrón arquitectural. Genera architecture.json en el proyecto.",
+        "Parsea el proyecto con AST (ts-morph) y devuelve la metadata estructurada de cada archivo: clases, funciones, exports, dependencias externas e imports internos. Usa esto para analizar la arquitectura sin llamar a ninguna API externa.",
       inputSchema: {
         type: "object",
         properties: {
-          path: {
-            type: "string",
-            description: "Ruta absoluta al proyecto (por defecto: directorio actual)",
+          path: { type: "string", description: "Ruta absoluta al proyecto" },
+        },
+        required: ["path"],
+      },
+    },
+    {
+      name: "write_architecture",
+      description:
+        "Escribe el archivo architecture.json en la raíz del proyecto con el resultado del análisis arquitectural.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Ruta absoluta al proyecto" },
+          architecture: {
+            type: "object",
+            description: "Objeto con features, connections y architecture según el schema de bether-qa",
           },
         },
+        required: ["path", "architecture"],
       },
     },
   ],
@@ -69,10 +77,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
-  const targetPath = (args?.path as string) || process.cwd();
-  const root = path.resolve(targetPath);
 
   if (name === "scan_project") {
+    const root = path.resolve(args?.path as string);
     const files = await glob("**/*.{ts,js}", {
       cwd: root,
       ignore: ["node_modules/**", "dist/**", "**/*.d.ts"],
@@ -96,7 +103,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   }
 
-  if (name === "analyze_architecture") {
+  if (name === "get_file_metadata") {
+    const root = path.resolve(args?.path as string);
     const files = await glob("**/*.{ts,js}", {
       cwd: root,
       ignore: ["node_modules/**", "dist/**", "**/*.d.ts"],
@@ -105,38 +113,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     if (files.length === 0) {
       return {
-        content: [
-          { type: "text", text: "No se encontraron archivos .ts o .js en el proyecto." },
-        ],
+        content: [{ type: "text", text: "No se encontraron archivos .ts o .js." }],
       };
     }
 
     const metadata = parseProject(files, root);
-    const result = await analyzeModules(metadata);
-    const projectName = path.basename(root);
-    const outputPath = writeArchitecture(result, projectName, root);
-
-    const lines = [
-      `✓ architecture.json generado: ${outputPath}`,
-      "",
-      `## Módulos (${result.features.length})`,
-      ...result.features.map((f) => `- **${f.name}** [${f.type}]: ${f.description}`),
-      "",
-      `## Conexiones (${result.connections.length})`,
-      ...result.connections.map((c) => `- ${c.from} → ${c.to} (${c.type}): ${c.description}`),
-      "",
-      `## Arquitectura`,
-      `- Patrón: ${result.architecture.pattern}`,
-      `- Capas: ${result.architecture.layers.join(" → ")}`,
-      "",
-      "## architecture.json",
-      "```json",
-      JSON.stringify(result, null, 2),
-      "```",
-    ];
 
     return {
-      content: [{ type: "text", text: lines.join("\n") }],
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ project: path.basename(root), totalFiles: files.length, files: metadata }, null, 2),
+        },
+      ],
+    };
+  }
+
+  if (name === "write_architecture") {
+    const root = path.resolve(args?.path as string);
+    const architectureData = args?.architecture as ArchitectureResult;
+
+    if (!architectureData || !Array.isArray(architectureData.features)) {
+      return {
+        content: [{ type: "text", text: "Error: el campo 'architecture' no tiene la estructura esperada (features, connections, architecture)." }],
+        isError: true,
+      };
+    }
+
+    const projectName = path.basename(root);
+    const outputPath = writeArchitecture(architectureData, projectName, root);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `✓ architecture.json generado: ${outputPath}\n\nMódulos: ${architectureData.features.length}\nConexiones: ${architectureData.connections.length}\nPatrón: ${architectureData.architecture.pattern}`,
+        },
+      ],
     };
   }
 

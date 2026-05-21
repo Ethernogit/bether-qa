@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir C:\\\\Users\\\\AMTI00580\\\\Documents\\\\oms\\\\eurocotton-oms-backend /AD /B)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\AMTI00580\\\\Documents\\\\others\\\\b\\\\bether-qa\" -Recurse -Directory)",
+      "Bash(Select-Object FullName)",
+      "Bash(Sort-Object FullName)",
+      "Bash(Format-Table -AutoSize)",
+      "PowerShell(ls \"C:\\\\Users\\\\AMTI00580\\\\Documents\\\\others\\\\b\\\\bether-qa\" | Select-Object Name, @{Name=\"Type\"; Expression={if\\($_.PSIsContainer\\){\"DIR\"}else{\"FILE\"}}})",
+      "Bash(node *)",
+      "Bash(Wait for *)",
+      "Bash(npx tsc *)",
+      "Skill(update-config)",
+      "PowerShell(echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}' | node \"C:\\\\Users\\\\AMTI00580\\\\Documents\\\\others\\\\b\\\\bether-qa\\\\bin\\\\bether-qa-mcp.js\")",
+      "PowerShell(node \"C:\\\\Users\\\\AMTI00580\\\\Documents\\\\others\\\\b\\\\bether-qa\\\\bin\\\\bether-qa-mcp.js\" 2>&1; Write-Host \"Exit: $LASTEXITCODE\")"
+    ]
+  }
+}
